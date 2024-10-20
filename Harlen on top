@@ -1,6 +1,6 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
-local Window = OrionLib:MakeWindow({Name = "Harlen Hub", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
+local Window = OrionLib:MakeWindow({Name = "Harlen Hub V0.01 | State of Anarchy", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
 
 local Tab = Window:MakeTab({
 	Name = "Principal",
@@ -18,6 +18,7 @@ Tab:AddButton({
       		_G.FriendColor = Color3.fromRGB(0, 0, 255)
 _G.EnemyColor = Color3.fromRGB(255, 0, 0)
 _G.UseTeamColor = true
+_G.ESPEnabled = true -- Controla se o ESP está ativado ou desativado
 
 --------------------------------------------------------------------
 local Holder = Instance.new("Folder", game.CoreGui)
@@ -51,196 +52,151 @@ Tag.Text = "nil"
 Tag.Font = Enum.Font.SourceSansBold
 Tag.TextScaled = false
 
-local LoadCharacter = function(v)
-	repeat wait() until v.Character ~= nil
-	v.Character:WaitForChild("Humanoid")
-	local vHolder = Holder:FindFirstChild(v.Name)
-	vHolder:ClearAllChildren()
-	local b = Box:Clone()
-	b.Name = v.Name .. "Box"
-	b.Adornee = v.Character
-	b.Parent = vHolder
-	local t = NameTag:Clone()
-	t.Name = v.Name .. "NameTag"
-	t.Enabled = true
-	t.Parent = vHolder
-	t.Adornee = v.Character:WaitForChild("Head", 5)
-	if not t.Adornee then
-		return UnloadCharacter(v)
-	end
-	t.Tag.Text = v.Name
-	b.Color3 = Color3.new(v.TeamColor.r, v.TeamColor.g, v.TeamColor.b)
-	t.Tag.TextColor3 = Color3.new(v.TeamColor.r, v.TeamColor.g, v.TeamColor.b)
-	local Update
-	local UpdateNameTag = function()
-		if not pcall(function()
-			v.Character.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-			local maxh = math.floor(v.Character.Humanoid.MaxHealth)
-			local h = math.floor(v.Character.Humanoid.Health)
-		end) then
-			Update:Disconnect()
-		end
-	end
-	UpdateNameTag()
-	Update = v.Character.Humanoid.Changed:Connect(UpdateNameTag)
+-- Função para aplicar o Highlight ao personagem
+local function applyHighlight(character, color)
+    if not character:FindFirstChild("GetReal") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "GetReal"
+        highlight.Adornee = character
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Sempre visível
+        highlight.FillColor = color
+        highlight.OutlineColor = Color3.new(0, 0, 0)
+        highlight.OutlineTransparency = 0
+        highlight.Parent = character
+    else
+        character.GetReal.FillColor = color
+    end
 end
 
-local UnloadCharacter = function(v)
-	local vHolder = Holder:FindFirstChild(v.Name)
-	if vHolder and (vHolder:FindFirstChild(v.Name .. "Box") ~= nil or vHolder:FindFirstChild(v.Name .. "NameTag") ~= nil) then
-		vHolder:ClearAllChildren()
-	end
+-- Função para remover o Highlight do personagem
+local function removeHighlight(character)
+    local highlight = character:FindFirstChild("GetReal")
+    if highlight then
+        highlight:Destroy()
+    end
 end
 
-local LoadPlayer = function(v)
-	local vHolder = Instance.new("Folder", Holder)
-	vHolder.Name = v.Name
-	v.CharacterAdded:Connect(function()
-		pcall(LoadCharacter, v)
-	end)
-	v.CharacterRemoving:Connect(function()
-		pcall(UnloadCharacter, v)
-	end)
-	v.Changed:Connect(function(prop)
-		if prop == "TeamColor" then
-			UnloadCharacter(v)
-			wait()
-			LoadCharacter(v)
-		end
-	end)
-	LoadCharacter(v)
+-- Função para carregar o personagem e adicionar ESP e Highlight
+local function LoadCharacter(v)
+    repeat wait() until v.Character ~= nil
+    v.Character:WaitForChild("Humanoid")
+    local vHolder = Holder:FindFirstChild(v.Name) or Instance.new("Folder", Holder)
+    vHolder.Name = v.Name
+    vHolder:ClearAllChildren()
+
+    local b = Box:Clone()
+    b.Name = v.Name .. "Box"
+    b.Adornee = v.Character
+    b.Parent = vHolder
+
+    local t = NameTag:Clone()
+    t.Name = v.Name .. "NameTag"
+    t.Enabled = true
+    t.Parent = vHolder
+    t.Adornee = v.Character:WaitForChild("Head", 5)
+    if not t.Adornee then
+        return UnloadCharacter(v)
+    end
+
+    t.Tag.Text = v.Name
+    b.Color3 = Color3.new(v.TeamColor.r, v.TeamColor.g, v.TeamColor.b)
+    t.Tag.TextColor3 = Color3.new(v.TeamColor.r, v.TeamColor.g, v.TeamColor.b)
+
+    -- Aplicar o Highlight se o ESP estiver habilitado
+    if _G.ESPEnabled then
+        applyHighlight(v.Character, b.Color3)
+    end
+
+    local Update
+    local UpdateNameTag = function()
+        if not pcall(function()
+            v.Character.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+            local maxh = math.floor(v.Character.Humanoid.MaxHealth)
+            local h = math.floor(v.Character.Humanoid.Health)
+        end) then
+            Update:Disconnect()
+        end
+    end
+    UpdateNameTag()
+    Update = v.Character.Humanoid.Changed:Connect(UpdateNameTag)
 end
 
-local UnloadPlayer = function(v)
-	UnloadCharacter(v)
-	local vHolder = Holder:FindFirstChild(v.Name)
-	if vHolder then
-		vHolder:Destroy()
-	end
+-- Função para descarregar o personagem e remover ESP e Highlight
+local function UnloadCharacter(v)
+    local vHolder = Holder:FindFirstChild(v.Name)
+    if vHolder then
+        vHolder:ClearAllChildren()
+    end
 end
 
+-- Carregar o jogador e adicionar eventos
+local function LoadPlayer(v)
+    v.CharacterAdded:Connect(function()
+        if _G.ESPEnabled then
+            pcall(LoadCharacter, v)
+        end
+    end)
+    v.CharacterRemoving:Connect(function()
+        UnloadCharacter(v)
+    end)
+    v.Changed:Connect(function(prop)
+        if prop == "TeamColor" then
+            UnloadCharacter(v)
+            wait()
+            if _G.ESPEnabled then
+                LoadCharacter(v)
+            end
+        end
+    end)
+    if _G.ESPEnabled then
+        LoadCharacter(v)
+    end
+end
+
+-- Descarregar o jogador e remover eventos
+local function UnloadPlayer(v)
+    UnloadCharacter(v)
+    local vHolder = Holder:FindFirstChild(v.Name)
+    if vHolder then
+        vHolder:Destroy()
+    end
+end
+
+-- Adicionar ESP para todos os jogadores
 for i,v in pairs(game:GetService("Players"):GetPlayers()) do
-	spawn(function() pcall(LoadPlayer, v) end)
+    spawn(function() pcall(LoadPlayer, v) end)
 end
 
+-- Conectar eventos de jogador adicionado e removido
 game:GetService("Players").PlayerAdded:Connect(function(v)
-	pcall(LoadPlayer, v)
+    pcall(LoadPlayer, v)
 end)
 
 game:GetService("Players").PlayerRemoving:Connect(function(v)
-	pcall(UnloadPlayer, v)
+    pcall(UnloadPlayer, v)
 end)
 
 game:GetService("Players").LocalPlayer.NameDisplayDistance = 0
 
-if _G.Reantheajfdfjdgs then
-    return
-end
-
-_G.Reantheajfdfjdgs = ":suifayhgvsdghfsfkajewfrhk321rk213kjrgkhj432rj34f67df"
-
-local players = game:GetService("Players")
-local plr = players.LocalPlayer
-
-function esp(target, color)
-    if target.Character then
-        if not target.Character:FindFirstChild("GetReal") then
-            local highlight = Instance.new("Highlight")
-            highlight.RobloxLocked = true
-            highlight.Name = "GetReal"
-            highlight.Adornee = target.Character
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.FillColor = color
-            highlight.Parent = target.Character
+-- Função para ativar/desativar o ESP com a tecla F1
+local UIS = game:GetService("UserInputService")
+UIS.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F1 then
+        _G.ESPEnabled = not _G.ESPEnabled
+        if _G.ESPEnabled then
+            -- Recarrega os personagens quando o ESP é ativado
+            for i,v in pairs(game:GetService("Players"):GetPlayers()) do
+                if v ~= game:GetService("Players").LocalPlayer then
+                    LoadCharacter(v)
+                end
+            end
         else
-            target.Character.GetReal.FillColor = color
-        end
-    end
-end
-
-while task.wait() do
-    for i, v in pairs(players:GetPlayers()) do
-        if v ~= plr then
-            esp(v, _G.UseTeamColor and v.TeamColor.Color or ((plr.TeamColor == v.TeamColor) and _G.FriendColor or _G.EnemyColor))
-        end
-    end
-end
-  	end    
-})
-
-Tab:AddButton({
-	Name = "Aim Lock(V)",
-	Callback = function()
-      		local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
-local camera = game.Workspace.CurrentCamera
-local aimLockEnabled = false
-local targetPlayer = nil
-local fov = 100 -- ajuste o valor do fov aqui
-
-local function drawFovCircle()
-    local fovCircle = Drawing.new("Circle")
-    fovCircle.Visible = true
-    fovCircle.Color = Color3.fromRGB(255, 255, 255)
-    fovCircle.Thickness = 1
-    fovCircle.NumSides = 100
-    fovCircle.Radius = fov
-    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    return fovCircle
-end
-
-local fovCircle = drawFovCircle()
-
-local function isVisible(part)
-    local ignoreList = {player.Character, camera}
-    local origin = camera.CFrame.Position
-    local direction = (part.Position - origin).unit * (part.Position - origin).magnitude
-
-    local ray = Ray.new(origin, direction)
-    local hitPart = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList)
-
-    return hitPart == part or not hitPart
-end
-
--- Remove a função isEnemy, já que queremos selecionar qualquer jogador
-
-local function getPlayerUnderMouse()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-
-    for _, target in ipairs(game.Players:GetPlayers()) do
-        if target ~= player and target.Character and target.Character:FindFirstChild("Head") then
-            local screenPoint = camera:WorldToScreenPoint(target.Character.Head.Position)
-            local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(mouse.X, mouse.Y)).magnitude
-            if distance < shortestDistance and distance <= fov and isVisible(target.Character.Head) then
-                shortestDistance = distance
-                closestPlayer = target
+            -- Remove todos os ESPs quando desativado
+            for i,v in pairs(game:GetService("Players"):GetPlayers()) do
+                UnloadCharacter(v)
+                removeHighlight(v.Character) -- Remove o highlight ao desativar
             end
         end
-    end
-
-    return closestPlayer
-end
-
--- Controlar o Aim Lock com a tecla "V"
-mouse.KeyDown:Connect(function(key)
-    if key == "v" then -- Tecla para ativar/desativar o aim lock
-        if aimLockEnabled then
-            aimLockEnabled = false -- Desativa o Aim Lock
-            targetPlayer = nil -- Limpa o alvo
-        else
-            targetPlayer = getPlayerUnderMouse() -- Define o alvo se o Aim Lock não estiver ativado
-            if targetPlayer then
-                aimLockEnabled = true -- Ativa o Aim Lock
-            end
-        end
-    end
-end)
-
-game:GetService("RunService").RenderStepped:Connect(function()
-    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    if aimLockEnabled and targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Head") then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, targetPlayer.Character.Head.Position)
     end
 end)
 
